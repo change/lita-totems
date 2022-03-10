@@ -84,6 +84,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
     context "totem exists" do
       before do
         send_message("totems create chicken")
+        send_message("totems create noir")
       end
 
       context "when nobody is in line" do
@@ -123,6 +124,26 @@ describe Lita::Handlers::Totems, lita_handler: true do
         end
       end
 
+      context "with a timeout" do
+        before do
+          Timecop.freeze("2014-03-01 12:00:00") do
+            send_message("totems add chicken timeout: 10", as: carl)
+            send_message("totems add chicken", as: another_user)
+            send_message("totems add chicken timeout: 20", as: yet_another_user)
+          end
+        end
+        it "includes the timeout in the totems' info" do
+          Timecop.freeze("2014-03-01 13:00:00") do
+            send_message("totems info chicken")
+            expect(replies.last).to eq <<-END
+1. Carl (held for 1h) - timeout: 10
+2. person_1 (waiting for 1h) - timeout: 24
+3. person_2 (waiting for 1h) - timeout: 20
+            END
+          end
+        end
+      end
+
       context "with a message" do
         before do
           Timecop.freeze("2014-03-01 12:00:00") do
@@ -138,6 +159,26 @@ describe Lita::Handlers::Totems, lita_handler: true do
 1. Carl (held for 1h) - message
 2. person_1 (waiting for 1h)
 3. person_2 (waiting for 1h) - other message
+            END
+          end
+        end
+      end
+
+      context "with a message and a timeout" do
+        before do
+          Timecop.freeze("2014-03-01 12:00:00") do
+            send_message("totems add chicken message timeout: 10", as: carl)
+            send_message("totems add chicken", as: another_user)
+            send_message("totems add chicken other message timeout:20", as: yet_another_user)
+          end
+        end
+        it "includes the timeout and the message in the totems' info" do
+          Timecop.freeze("2014-03-01 13:00:00") do
+            send_message("totems info chicken")
+            expect(replies.last).to eq <<-END
+1. Carl (held for 1h) - message - timeout: 10
+2. person_1 (waiting for 1h) - timeout: 24
+3. person_2 (waiting for 1h) - other message - timeout: 20
             END
           end
         end
