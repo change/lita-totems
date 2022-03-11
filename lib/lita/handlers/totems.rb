@@ -7,10 +7,8 @@ module Lita
   module Handlers
     class Totems < Handler
       
-      config :signalfx_token, type: String, required: true
-      
       def signalfx_client
-        SignalFx.new config.signalfx_token
+        SignalFx.new ENV['LITA_SLACK_TOKEN']
       end
 
       def self.route_regex(action_capture_group)
@@ -261,6 +259,7 @@ module Lita
         redis.hdel("totem/#{totem}/message", user_id)
         next_user_id = redis.lpop("totem/#{totem}/list")
         if next_user_id
+          # capture waiting time metric
           redis.set("totem/#{totem}/owning_user_id", next_user_id)
           redis.sadd("user/#{next_user_id}/totems", totem)
           redis.hset("totem/#{totem}/waiting_since", next_user_id, Time.now.to_i)
