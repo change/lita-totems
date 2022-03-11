@@ -254,7 +254,6 @@ module Lita
         user_waiting_time_in_seconds = Time.now.to_i - waiting_since_hash[user_id].to_i
         user_waiting_time_in_minutes = user_waiting_time_in_seconds / 60
         puts user_waiting_time_in_minutes
-        #send_stats_to_signalFX("user:holding_time:#{user_id}",user_waiting_time_in_minutes)
         send_stats_to_signalFX("totems:holding_time:#{totem}",user_waiting_time_in_minutes)
 
         redis.srem("user/#{user_id}/totems", totem)
