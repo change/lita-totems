@@ -74,7 +74,7 @@ module Lita
         }x,
         :stats,
         help: {
-          'totems info'       => "Get totem's stats SignalFX link",
+          'totems get stats'       => "Get totem's stats SignalFX link",
         })
 
       def destroy(response)
