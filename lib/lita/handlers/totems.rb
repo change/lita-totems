@@ -8,7 +8,7 @@ module Lita
     class Totems < Handler
       
       def signalfx_client 
-        @signalfx_client ||= SignalFx.new ENV['LITA_SLACK_TOKEN']
+        @signalfx_client ||= SignalFx.new ENV['LITA_SIGNALFX_TOKEN']
       end
 
       def self.route_regex(action_capture_group)
