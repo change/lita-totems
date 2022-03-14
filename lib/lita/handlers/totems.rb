@@ -262,8 +262,9 @@ module Lita
       end
 
       def yield_totem(totem, user_id, response)
-        holding_since_hash = redis.hgetall("totem/#{totem}/waiting_since")
-        user_holding_time_in_seconds = Time.now.to_i - holding_since_hash[user_id].to_i
+        waiting_since_hash = redis.hgetall("totem/#{totem}/waiting_since")
+        # capture holding time metric
+        user_holding_time_in_seconds = Time.now.to_i - waiting_since_hash[user_id].to_i
         user_holding_time_in_minutes = user_holding_time_in_seconds / 60
         send_stats_to_signalFX("totems:holding_time:#{totem}",user_holding_time_in_minutes)
 
@@ -273,7 +274,6 @@ module Lita
         next_user_id = redis.lpop("totem/#{totem}/list")
         if next_user_id
           # capture waiting time metric
-          waiting_since_hash = redis.hgetall("totem/#{totem}/waiting_since")
           user_waiting_time_in_seconds = Time.now.to_i - waiting_since_hash[next_user_id].to_i
           user_waiting_time_in_minutes = user_waiting_time_in_seconds / 60
           puts user_waiting_time_in_minutes
