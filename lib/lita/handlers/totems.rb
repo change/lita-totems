@@ -124,7 +124,7 @@ module Lita
           response.reply %{Error: you already have the totem "#{totem}".}
           return
         end
-       
+        # captures how many times a totem is being added
         send_stats_to_signalFX("totems:add:#{totem}", 1)
 
         message = response.match_data[:message]
@@ -150,6 +150,8 @@ module Lita
           redis.sadd("user/#{user_id}/totems", totem)
           response.reply(%{#{response.user.name}, you now have totem "#{totem}".})
         else
+          # captures how many people are waiting for a totem.
+          send_stats_to_signalFX("totems:people_waiting:#{totem}", 1)
           response.reply(%{#{response.user.name}, you are \##{queue_size} in line for totem "#{totem}".})
         end
 
@@ -263,7 +265,7 @@ module Lita
 
       def yield_totem(totem, user_id, response)
         waiting_since_hash = redis.hgetall("totem/#{totem}/waiting_since")
-        # capture holding time metric
+        # captures holding time metric
         user_holding_time_in_seconds = Time.now.to_i - waiting_since_hash[user_id].to_i
         user_holding_time_in_minutes = user_holding_time_in_seconds / 60
         send_stats_to_signalFX("totems:holding_time:#{totem}",user_holding_time_in_minutes)
@@ -273,7 +275,7 @@ module Lita
         redis.hdel("totem/#{totem}/message", user_id)
         next_user_id = redis.lpop("totem/#{totem}/list")
         if next_user_id
-          # capture waiting time metric
+          # captures new totem owner waiting time metric
           user_waiting_time_in_seconds = Time.now.to_i - waiting_since_hash[next_user_id].to_i
           user_waiting_time_in_minutes = user_waiting_time_in_seconds / 60
           puts user_waiting_time_in_minutes
