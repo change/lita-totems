@@ -7,8 +7,8 @@ module Lita
   module Handlers
     class Totems < Handler
       
-      def signalfx_client
-        SignalFx.new ENV['LITA_SLACK_TOKEN']
+      def signalfx_client 
+        @signalfx_client ||= SignalFx.new ENV['LITA_SLACK_TOKEN']
       end
 
       def self.route_regex(action_capture_group)
@@ -52,7 +52,6 @@ module Lita
               'totems kick TOTEM' => 'Kicks the user currently in possession of the TOTEM off.',
             })
 
-
       route(
         %r{
             ^totems?
@@ -65,6 +64,17 @@ module Lita
         help: {
           'totems info'       => "Shows info of all totems queues",
           'totems info TOTEM' => 'Shows info of just one totem'
+        })
+
+      route(
+        %r{
+        ^totems?
+        \s+get?
+        \s+stats?
+        }x,
+        :stats,
+        help: {
+          'totems info'       => "Get totem's stats SignalFX link",
         })
 
       def destroy(response)
@@ -219,6 +229,10 @@ module Lita
         response.reply resp
       end
 
+      def stats(response)
+        response.reply %{https://app.signalfx.com/#/dashboard/FNSkEUVAYAA}
+      end
+
       private
       def new_users_cache
         Hash.new { |h, id| h[id] = Lita::User.find_by_id(id) }
@@ -248,11 +262,10 @@ module Lita
       end
 
       def yield_totem(totem, user_id, response)
-        waiting_since_hash = redis.hgetall("totem/#{totem}/waiting_since")
-        user_waiting_time_in_seconds = Time.now.to_i - waiting_since_hash[user_id].to_i
-        user_waiting_time_in_minutes = user_waiting_time_in_seconds / 60
-        puts user_waiting_time_in_minutes
-        send_stats_to_signalFX("totems:holding_time:#{totem}",user_waiting_time_in_minutes)
+        holding_since_hash = redis.hgetall("totem/#{totem}/waiting_since")
+        user_holding_time_in_seconds = Time.now.to_i - holding_since_hash[user_id].to_i
+        user_holding_time_in_minutes = user_holding_time_in_seconds / 60
+        send_stats_to_signalFX("totems:holding_time:#{totem}",user_holding_time_in_minutes)
 
         redis.srem("user/#{user_id}/totems", totem)
         redis.hdel("totem/#{totem}/waiting_since", user_id)
@@ -260,6 +273,12 @@ module Lita
         next_user_id = redis.lpop("totem/#{totem}/list")
         if next_user_id
           # capture waiting time metric
+          waiting_since_hash = redis.hgetall("totem/#{totem}/waiting_since")
+          user_waiting_time_in_seconds = Time.now.to_i - waiting_since_hash[next_user_id].to_i
+          user_waiting_time_in_minutes = user_waiting_time_in_seconds / 60
+          puts user_waiting_time_in_minutes
+          send_stats_to_signalFX("totems:waiting_time:#{totem}",user_waiting_time_in_minutes)
+
           redis.set("totem/#{totem}/owning_user_id", next_user_id)
           redis.sadd("user/#{next_user_id}/totems", totem)
           redis.hset("totem/#{totem}/waiting_since", next_user_id, Time.now.to_i)
