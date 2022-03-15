@@ -1,16 +1,15 @@
 require 'lita'
 require 'chronic_duration'
 require 'redis-semaphore'
-require 'signalfx'
-
+require "lita/handlers/stats"
 module Lita
   module Handlers
     class Totems < Handler
-      
-      def signalfx_client 
-        @signalfx_client ||= SignalFx.new ENV['LITA_SIGNALFX_TOKEN']
-      end
 
+      
+
+      stats = Stats.new
+      
       def self.route_regex(action_capture_group)
         %r{
         ^totems?\s+
@@ -124,8 +123,8 @@ module Lita
           response.reply %{Error: you already have the totem "#{totem}".}
           return
         end
-        # captures how many times a totem is being added
-        send_stats_to_signalFX("totems:add:#{totem}", 1)
+
+        Stats.capture_totem_use(totem)
 
         message = response.match_data[:message]
 
@@ -150,8 +149,7 @@ module Lita
           redis.sadd("user/#{user_id}/totems", totem)
           response.reply(%{#{response.user.name}, you now have totem "#{totem}".})
         else
-          # captures how many people are waiting for a totem.
-          send_stats_to_signalFX("totems:people_waiting:#{totem}", 1)
+          Stats.capture_people_waiting(totem)
           response.reply(%{#{response.user.name}, you are \##{queue_size} in line for totem "#{totem}".})
         end
 
@@ -232,7 +230,7 @@ module Lita
       end
 
       def stats(response)
-        response.reply %{https://app.signalfx.com/#/dashboard/FNSkEUVAYAA}
+        response.reply %{#{Stats.signalfx_dashboard}}
       end
 
       private
@@ -265,22 +263,14 @@ module Lita
 
       def yield_totem(totem, user_id, response)
         waiting_since_hash = redis.hgetall("totem/#{totem}/waiting_since")
-        # captures holding time metric
-        user_holding_time_in_seconds = Time.now.to_i - waiting_since_hash[user_id].to_i
-        user_holding_time_in_minutes = user_holding_time_in_seconds / 60
-        send_stats_to_signalFX("totems:holding_time:#{totem}",user_holding_time_in_minutes)
+        Stats.capture_holding_time(totem, waiting_since_hash[user_id])    
 
         redis.srem("user/#{user_id}/totems", totem)
         redis.hdel("totem/#{totem}/waiting_since", user_id)
         redis.hdel("totem/#{totem}/message", user_id)
         next_user_id = redis.lpop("totem/#{totem}/list")
         if next_user_id
-          # captures new totem owner waiting time metric
-          user_waiting_time_in_seconds = Time.now.to_i - waiting_since_hash[next_user_id].to_i
-          user_waiting_time_in_minutes = user_waiting_time_in_seconds / 60
-          puts user_waiting_time_in_minutes
-          send_stats_to_signalFX("totems:waiting_time:#{totem}",user_waiting_time_in_minutes)
-
+          Stats.capture_waiting_time(totem, waiting_since_hash[next_user_id])
           redis.set("totem/#{totem}/owning_user_id", next_user_id)
           redis.sadd("user/#{next_user_id}/totems", totem)
           redis.hset("totem/#{totem}/waiting_since", next_user_id, Time.now.to_i)
@@ -301,20 +291,6 @@ module Lita
           redis.lrange("totem/#{totem}/list", 0, -1).include?(user_id)
         end
       end
-
-      def send_stats_to_signalFX(metric, value)
-        signalfx_client.send( 
-          gauges:
-           [ 
-             {  
-              :metric => metric,
-              :value => value,
-              :timestamp => (Time.now.to_f * 1000).to_i
-            }
-          ]
-        )
-      end
-
     end
 
     Lita.register_handler(Totems)
