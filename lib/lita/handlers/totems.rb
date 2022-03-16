@@ -145,7 +145,7 @@ module Lita
           redis.sadd("user/#{user_id}/totems", totem)
           response.reply(%{#{response.user.name}, you now have totem "#{totem}".})
         else
-          Stats.capture_people_waiting(totem)
+          Stats.capture_people_waiting(totem, queue_size)
           response.reply(%{#{response.user.name}, you are \##{queue_size} in line for totem "#{totem}".})
         end
 
