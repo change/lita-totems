@@ -6,10 +6,6 @@ module Lita
   module Handlers
     class Totems < Handler
 
-      
-
-      stats = Stats.new
-      
       def self.route_regex(action_capture_group)
         %r{
         ^totems?\s+
@@ -73,7 +69,7 @@ module Lita
         }x,
         :stats,
         help: {
-          'totems get stats'       => "Get totem's stats SignalFX link",
+          'totems get stats' => "Get totem's stats SignalFX link",
         })
 
       def destroy(response)
