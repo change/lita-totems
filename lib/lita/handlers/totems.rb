@@ -74,7 +74,7 @@ module Lita
 
       def destroy(response)
         totem = response.match_data[:totem]
-        if redis.exists("totem/#{totem}") != 0
+        if totem_exists? redis, totem
           redis.del("totem/#{totem}")
           redis.del("totem/#{totem}/list")
           redis.srem("totems", totem)
@@ -91,7 +91,7 @@ module Lita
       def create(response)
         totem = response.match_data[:totem]
 
-        if redis.exists("totem/#{totem}") != 0
+        if totem_exists? redis, totem
           response.reply %{Error: totem "#{totem}" already exists.}
         else
           redis.set("totem/#{totem}", 1)
@@ -103,7 +103,7 @@ module Lita
 
       def add(response)
         totem = response.match_data[:totem]
-        unless redis.exists("totem/#{totem}") != 0
+        unless totem_exists? redis, totem
           response.reply %{Error: there is no totem "#{totem}".}
           return
         end
@@ -186,7 +186,7 @@ module Lita
 
       def kick(response)
         totem = response.match_data[:totem]
-        unless redis.exists("totem/#{totem}") != 0
+        unless totem_exists? redis, totem
           response.reply %{Error: there is no totem "#{totem}".}
           return
         end
@@ -230,6 +230,10 @@ module Lita
       end
 
       private
+      def totem_exists?(redis, totem)
+        redis.exists("totem/#{totem}") != 0
+      end
+
       def new_users_cache
         Hash.new { |h, id| h[id] = Lita::User.find_by_id(id) }
       end
