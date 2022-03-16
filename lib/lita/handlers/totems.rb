@@ -120,7 +120,7 @@ module Lita
           return
         end
 
-        message = response.match_data[:message]
+        message = response.match_data[:message].strip
         timeout = response.match_data[:timeout]
         if !timeout.nil? && timeout != '0'
           timeout = timeout.to_i
@@ -133,7 +133,7 @@ module Lita
         queue_size     = nil
         Redis::Semaphore.new("totem/#{totem}", redis: redis).lock do
           redis.hset("totem/#{totem}/message", user_id, message) if message && message != ""
-          redis.hset("totem/#{totem}/timeout", user_id, timeout) if timeout && @@DemoEnvironments.include?(totem)
+          redis.hset("totem/#{totem}/timeout", user_id, timeout) if @@DemoEnvironments.include?(totem)
           if redis.llen("totem/#{totem}/list") == 0 && redis.get("totem/#{totem}/owning_user_id").nil?
             # take it:
             token_acquired = true
@@ -173,7 +173,7 @@ module Lita
               redis.lrem("totem/#{totem_specified}/list", 0, user_id)
               redis.hdel("totem/#{totem_specified}/waiting_since", user_id)
               redis.hdel("totem/#{totem_specified}/message", user_id)
-              redis.hdel("totem/#{totem}/timeout", user_id)
+              redis.hdel("totem/#{totem_specified}/timeout", user_id)
               response.reply("You are no longer in line for the \"#{totem_specified}\" totem.")
             else
               response.reply %{Error: You don't own and aren't waiting for the "#{totem_specified}" totem.}
@@ -249,6 +249,7 @@ module Lita
           rest.each_with_index do |user_id, index|
             str += "#{prefix}#{index+2}. #{users_cache[user_id].name} (waiting for #{waiting_duration(waiting_since_hash[user_id])})"
             str += " - #{message_hash[user_id]}" if message_hash[user_id]
+            str += " - timeout: #{timeout_hash[user_id]}" if timeout_hash[user_id]
             str += "\n"
           end
         end
