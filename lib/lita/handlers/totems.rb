@@ -18,7 +18,7 @@ module Lita
       route(route_regex("add|join|take|queue"), :add,
             help: {
               'totems add TOTEM <MESSAGE>' => "Adds yourself to the TOTEM queue, or assigns yourself to the TOTEM if it's unassigned. Includes optional MESSAGE."
-            })
+      })
 
       route(
         %r{
@@ -64,7 +64,7 @@ module Lita
 
       def destroy(response)
         totem = response.match_data[:totem]
-        if redis.exists("totem/#{totem}")
+        if redis.exists("totem/#{totem}") != 0
           redis.del("totem/#{totem}")
           redis.del("totem/#{totem}/list")
           redis.srem("totems", totem)
@@ -81,7 +81,7 @@ module Lita
       def create(response)
         totem = response.match_data[:totem]
 
-        if redis.exists("totem/#{totem}")
+        if redis.exists("totem/#{totem}") != 0
           response.reply %{Error: totem "#{totem}" already exists.}
         else
           redis.set("totem/#{totem}", 1)
@@ -93,7 +93,7 @@ module Lita
 
       def add(response)
         totem = response.match_data[:totem]
-        unless redis.exists("totem/#{totem}")
+        unless redis.exists("totem/#{totem}") != 0
           response.reply %{Error: there is no totem "#{totem}".}
           return
         end
@@ -169,7 +169,7 @@ module Lita
 
       def kick(response)
         totem = response.match_data[:totem]
-        unless redis.exists("totem/#{totem}")
+        unless redis.exists("totem/#{totem}") != 0
           response.reply %{Error: there is no totem "#{totem}".}
           return
         end
