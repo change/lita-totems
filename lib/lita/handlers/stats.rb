@@ -1,7 +1,7 @@
 require 'signalfx'
 
 module Stats
-
+  module_function
   SIGNALFX_TOTEMS_METRICS_DASHBOARD = "https://app.signalfx.com/#/dashboard/FNSkEUVAYAA"
 
   def signalfx_client
@@ -49,5 +49,4 @@ module Stats
     SIGNALFX_TOTEMS_METRICS_DASHBOARD
   end
 
-  module_function :send_to_signalFX, :capture_totem_use, :capture_people_waiting, :capture_holding_time, :capture_waiting_time, :signalfx_dashboard, :signalfx_client
 end
