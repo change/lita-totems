@@ -129,14 +129,12 @@ describe Lita::Handlers::Totems, lita_handler: true do
       end
 
       context "with a timeout" do
-        before do
+        it "includes the timeout in the totems' info" do
           Timecop.freeze("2014-03-01 12:00:00") do
             send_message("totems add noir timeout: 10", as: carl)
             send_message("totems add noir", as: another_user)
             send_message("totems add noir timeout: 20", as: yet_another_user)
           end
-        end
-        it "includes the timeout in the totems' info" do
           Timecop.freeze("2014-03-01 13:00:00") do
             send_message("totems info noir")
             expect(replies.last).to eq <<-END
@@ -148,11 +146,19 @@ describe Lita::Handlers::Totems, lita_handler: true do
         end
 
         it "triggers the timeout when the totem is in the list" do
-          send_message("totems add noir timeout: 10", as: carl)
+          send_message("totems add noir timeout: 3", as: carl)
+          wait(10).for do
+              send_message("totems info noir")
+              replies.last.empty?
+          end.to be(true)
         end
 
         it "doesn't trigger the timeout on any totem" do
-          send_message("totems add chicken timeout: 10", as: carl)
+          send_message("totems add chicken timeout: 3", as: carl)
+          wait(10).for do
+              send_message("totems info chicken")
+              replies.last
+          end.to eq("1. Carl (held for 5s)\n")
         end
       end
 

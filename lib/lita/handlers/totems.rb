@@ -286,7 +286,7 @@ module Lita
         # TODO: Find a way to identify pending jobs so we can cancel them instead of letting them finish and then checking 
         if next_user_id
           timeout_hash = redis.hgetall("totem/#{totem}/timeout")
-          take_totem(response, totem, next_user_id, timeout_hash[next_user_id])
+          take_totem(response, totem, next_user_id, timeout_hash[next_user_id].to_i)
           next_user = Lita::User.find_by_id(next_user_id)
           robot.send_messages(Lita::Source.new(user: next_user), %{You are now in possession of totem "#{totem}," yielded by #{response.user.name}.})
           response.reply "You have yielded the totem to #{next_user.name}."
