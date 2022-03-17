@@ -12,7 +12,14 @@ describe Lita::Handlers::Totems, lita_handler: true do
   it { is_expected.to route("totems").to(:info) }
   it { is_expected.to route("totems info").to(:info) }
   it { is_expected.to route("totems info chicken").to(:info) }
+  it { is_expected.to route("totems get stats").to(:stats) }
 
+  # mock stats to not send test data to signalfx
+  before(:each) do
+    signalfx_client = double("Stats").as_null_object
+    allow(Stats).to receive(:send_counter_to_signalFX).and_return(signalfx_client)
+    allow(Stats).to receive(:send_gauges_to_signalFX).and_return(signalfx_client)
+  end
 
   let(:totem_creator) { Class.new do
     def initialize
@@ -42,6 +49,13 @@ describe Lita::Handlers::Totems, lita_handler: true do
   }
   let(:another_user) { user_generator.generate }
   let(:yet_another_user) { user_generator.generate }
+
+  describe "get stats" do
+    it "returns signalfx metric dashboard link" do
+      send_message('totems get stats')
+      expect(replies.last).to eq('https://app.signalfx.com/#/dashboard/FNSkEUVAYAA')
+    end
+  end
 
   describe "create" do
     it "creates a totem" do
@@ -91,6 +105,11 @@ describe Lita::Handlers::Totems, lita_handler: true do
           send_message("totems add chicken", as: carl)
           expect(replies.last).to eq('Carl, you now have totem "chicken".')
         end
+
+        it "calls capture_totem_use with the specified totem" do
+          expect(Stats).to receive(:capture_totem_use).with("chicken")
+          send_message("totems add chicken", as: carl)
+        end
       end
       context "when people are in line" do
         before do
@@ -101,6 +120,17 @@ describe Lita::Handlers::Totems, lita_handler: true do
           send_message("totems add chicken", as: carl)
           expect(replies.last).to eq('Carl, you are #2 in line for totem "chicken".')
         end
+
+        it "calls capture_totem_use with the specified totem" do
+          expect(Stats).to receive(:capture_totem_use).with("chicken")
+          send_message("totems add chicken", as: carl)
+        end
+
+        it "calls capture_people_waiting with the specified totem and queue size" do
+          expect(Stats).to receive(:capture_people_waiting).with("chicken", 2)
+          send_message("totems add chicken", as: carl)
+        end
+
       end
       context "when the user is already holding the totem" do
         before do
@@ -110,6 +140,12 @@ describe Lita::Handlers::Totems, lita_handler: true do
           send_message("totems add chicken", as: carl)
           expect(replies.last).to eq('Error: you already have the totem "chicken".')
         end
+
+        it "doesnt call capture_totem_use with the specified totem" do
+          expect(Stats).not_to receive(:capture_totem_use).with("chicken")
+          send_message("totems add chicken", as: carl)
+        end
+
       end
 
       context "when the user is already in line for the totem" do
@@ -120,6 +156,21 @@ describe Lita::Handlers::Totems, lita_handler: true do
         it "returns an error message" do
           send_message("totems add chicken", as: carl)
           expect(replies.last).to eq('Error: you are already in the queue for "chicken".')
+        end
+
+        it "doesnt call capture_totem_use with the specified totem" do
+          expect(Stats).not_to receive(:capture_totem_use).with("chicken")
+          send_message("totems add chicken", as: carl)
+        end
+
+      end
+
+      context "when totems add multiple times" do
+         it "calls capture_totem_use with the specified totem" do
+          expect(Stats).to receive(:capture_totem_use).with("chicken").thrice
+          send_message("totems add chicken message", as: carl)
+          send_message("totems add chicken", as: another_user)
+          send_message("totems add chicken other message", as: yet_another_user)
         end
       end
 
@@ -149,6 +200,11 @@ describe Lita::Handlers::Totems, lita_handler: true do
         send_message("totems add chicken", as: carl)
         expect(replies.last).to eq('Error: there is no totem "chicken".')
       end
+
+      it "doesnt call capture_totem_use with the specified totem" do
+        expect(Stats).not_to receive(:capture_totem_use).with("chicken")
+        send_message("totems add chicken message", as: carl)
+      end
     end
   end
 
@@ -165,6 +221,13 @@ describe Lita::Handlers::Totems, lita_handler: true do
         end
       end
 
+      it "calls capture_holding_time with the specified totem and user's holding time" do
+        Timecop.freeze("2014-03-01 13:00:00") do
+          expect(Stats).to receive(:capture_holding_time).with("chicken", "1393671600")
+          send_message("totems yield chicken", as: carl)
+        end
+      end
+
       context "someone else is in line" do
         before do
           Timecop.freeze("2014-03-01 12:00:00") do
@@ -172,6 +235,14 @@ describe Lita::Handlers::Totems, lita_handler: true do
             send_message("totems add chicken", as: yet_another_user)
           end
         end
+
+        it "calls capture_waiting_time with the specified totem and next user waiting time" do
+          Timecop.freeze("2014-03-01 13:00:00") do
+            expect(Stats).to receive(:capture_waiting_time).with("chicken", "1393675200")
+            send_message("totems yield chicken", as: carl)
+          end
+        end
+ 
         it "yields that totem, gives to the next person in line" do
           expect(robot).to receive(:send_messages).twice do |target, message|
             expect([another_user.id, carl.id]).to include(target.user.id)
@@ -207,6 +278,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
           send_message("totems info chicken")
           expect(replies.last).to eq ""
         end
+
       end
     end
     context "when user has no totems" do

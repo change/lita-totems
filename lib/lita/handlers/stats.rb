@@ -54,8 +54,8 @@ module Stats
   # captures totem's waiting time by the next user
   def capture_waiting_time(totem, waiting_since_hash_next_user_id)
     user_waiting_time_in_seconds = Time.now.to_i - waiting_since_hash_next_user_id.to_i
-    user_holding_time_in_minutes = user_waiting_time_in_seconds / 60
-    send_gauges_to_signalFX("totems:holding_time:#{totem}",user_holding_time_in_minutes)
+    user_waiting_time_in_minutes = user_waiting_time_in_seconds / 60
+    send_gauges_to_signalFX("totems:waiting_time:#{totem}",user_waiting_time_in_minutes)
   end
 
   def signalfx_dashboard
