@@ -1,7 +1,7 @@
 require 'lita'
 require 'chronic_duration'
 require 'redis-semaphore'
-
+require "lita/handlers/stats"
 module Lita
   module Handlers
     class Totems < Handler
@@ -57,7 +57,6 @@ module Lita
               'totems kick TOTEM' => 'Kicks the user currently in possession of the TOTEM off.',
             })
 
-
       route(
         %r{
             ^totems?
@@ -70,6 +69,17 @@ module Lita
         help: {
           'totems info'       => "Shows info of all totems queues",
           'totems info TOTEM' => 'Shows info of just one totem'
+        })
+
+      route(
+        %r{
+        ^totems?
+        \s+get?
+        \s+stats?
+        }x,
+        :stats,
+        help: {
+          'totems get stats' => "Get totem's stats SignalFX link",
         })
 
       def destroy(response)
@@ -120,6 +130,7 @@ module Lita
           return
         end
 
+        Stats.capture_totem_use(totem)
         message = response.match_data[:message].strip
         timeout = response.match_data[:timeout]
         if !timeout.nil? && timeout != '0'
@@ -149,6 +160,7 @@ module Lita
           # TODO don't readd to totems you are already waiting for!
           response.reply(%{#{response.user.name}, you now have totem "#{totem}".})
         else
+          Stats.capture_people_waiting(totem, queue_size)
           response.reply(%{#{response.user.name}, you are \##{queue_size} in line for totem "#{totem}".})
         end
 
@@ -229,6 +241,10 @@ module Lita
         response.reply resp
       end
 
+      def stats(response)
+        response.reply %{#{Stats.signalfx_dashboard}}
+      end
+
       private
       def totem_exists?(redis, totem)
         redis.exists("totem/#{totem}") != 0
@@ -281,6 +297,9 @@ module Lita
       end
 
       def yield_totem(totem, user_id, response)
+        waiting_since_hash = redis.hgetall("totem/#{totem}/waiting_since")
+        Stats.capture_holding_time(totem, waiting_since_hash[user_id])    
+
         redis.srem("user/#{user_id}/totems", totem)
         redis.hdel("totem/#{totem}/waiting_since", user_id)
         redis.hdel("totem/#{totem}/message", user_id)
@@ -290,6 +309,7 @@ module Lita
         # TODO: Find a way to identify pending jobs so we can cancel them instead of letting them finish and then checking 
         if next_user_id
           timeout_hash = redis.hgetall("totem/#{totem}/timeout")
+          Stats.capture_waiting_time(totem, waiting_since_hash[next_user_id])
           take_totem(response, totem, next_user_id, timeout_hash[next_user_id].to_i)
           next_user = Lita::User.find_by_id(next_user_id)
           robot.send_messages(Lita::Source.new(user: next_user), %{You are now in possession of totem "#{totem}," yielded by #{response.user.name}.})
@@ -308,7 +328,6 @@ module Lita
           redis.lrange("totem/#{totem}/list", 0, -1).include?(user_id)
         end
       end
-
     end
 
     Lita.register_handler(Totems)
