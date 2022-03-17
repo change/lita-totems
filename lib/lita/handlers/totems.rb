@@ -1,7 +1,7 @@
 require 'lita'
 require 'chronic_duration'
 require 'redis-semaphore'
-
+require "lita/handlers/stats"
 module Lita
   module Handlers
     class Totems < Handler
@@ -47,7 +47,6 @@ module Lita
               'totems kick TOTEM' => 'Kicks the user currently in possession of the TOTEM off.',
             })
 
-
       route(
         %r{
             ^totems?
@@ -60,6 +59,17 @@ module Lita
         help: {
           'totems info'       => "Shows info of all totems queues",
           'totems info TOTEM' => 'Shows info of just one totem'
+        })
+
+      route(
+        %r{
+        ^totems?
+        \s+get?
+        \s+stats?
+        }x,
+        :stats,
+        help: {
+          'totems get stats' => "Get totem's stats SignalFX link",
         })
 
       def destroy(response)
@@ -110,6 +120,8 @@ module Lita
           return
         end
 
+        Stats.capture_totem_use(totem)
+
         message = response.match_data[:message]
 
         token_acquired = false
@@ -133,6 +145,7 @@ module Lita
           redis.sadd("user/#{user_id}/totems", totem)
           response.reply(%{#{response.user.name}, you now have totem "#{totem}".})
         else
+          Stats.capture_people_waiting(totem, queue_size)
           response.reply(%{#{response.user.name}, you are \##{queue_size} in line for totem "#{totem}".})
         end
 
@@ -212,6 +225,10 @@ module Lita
         response.reply resp
       end
 
+      def stats(response)
+        response.reply %{#{Stats.signalfx_dashboard}}
+      end
+
       private
       def new_users_cache
         Hash.new { |h, id| h[id] = Lita::User.find_by_id(id) }
@@ -241,11 +258,15 @@ module Lita
       end
 
       def yield_totem(totem, user_id, response)
+        waiting_since_hash = redis.hgetall("totem/#{totem}/waiting_since")
+        Stats.capture_holding_time(totem, waiting_since_hash[user_id])    
+
         redis.srem("user/#{user_id}/totems", totem)
         redis.hdel("totem/#{totem}/waiting_since", user_id)
         redis.hdel("totem/#{totem}/message", user_id)
         next_user_id = redis.lpop("totem/#{totem}/list")
         if next_user_id
+          Stats.capture_waiting_time(totem, waiting_since_hash[next_user_id])
           redis.set("totem/#{totem}/owning_user_id", next_user_id)
           redis.sadd("user/#{next_user_id}/totems", totem)
           redis.hset("totem/#{totem}/waiting_since", next_user_id, Time.now.to_i)
@@ -266,7 +287,6 @@ module Lita
           redis.lrange("totem/#{totem}/list", 0, -1).include?(user_id)
         end
       end
-
     end
 
     Lita.register_handler(Totems)
