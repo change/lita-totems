@@ -205,7 +205,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
           end.to be(true)
         end
 
-        it "doesn't trigger the timeout on any totem" do
+        it "doesn't trigger timeout when the totem is not on a demo environment" do
           send_message("totems add chicken timeout: 3", as: carl)
           wait(10).for do
               send_message("totems info chicken")
