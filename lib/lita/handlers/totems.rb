@@ -290,13 +290,13 @@ module Lita
             # Check that the user is the current owner of the totem
             current_owner = redis.get("totem/#{totem}/owning_user_id")
             if user_id == current_owner
-              yield_totem(response.match_data[:totem], user_id, response)
+              yield_totem(response.match_data[:totem], user_id, response, true)
             end
           end
         end
       end
 
-      def yield_totem(totem, user_id, response)
+      def yield_totem(totem, user_id, response, timeout=false)
         waiting_since_hash = redis.hgetall("totem/#{totem}/waiting_since")
         Stats.capture_holding_time(totem, waiting_since_hash[user_id])    
 
@@ -312,11 +312,17 @@ module Lita
           Stats.capture_waiting_time(totem, waiting_since_hash[next_user_id])
           take_totem(response, totem, next_user_id, timeout_hash[next_user_id].to_i)
           next_user = Lita::User.find_by_id(next_user_id)
-          robot.send_messages(Lita::Source.new(user: next_user), %{You are now in possession of totem "#{totem}," yielded by #{response.user.name}.})
-          response.reply "You have yielded the totem to #{next_user.name}."
+          robot.send_messages(Lita::Source.new(user: next_user), %{You are now in possession of totem "#{totem}", yielded by #{response.user.name}.})
+          if timeout
+            robot.send_messages(Lita::Source.new(user: response.user.name), %{Your totem "#{totem}", expired and has been given to #{nex_user.name}.})
+          else
+            response.reply "You have yielded the totem to #{next_user.name}."
+          end
         else
           redis.del("totem/#{totem}/owning_user_id")
-          response.reply %{You have yielded the "#{totem}" totem.}
+          unless timeout
+            response.reply %{You have yielded the "#{totem}" totem.}
+          end
         end
       end
 
