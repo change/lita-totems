@@ -196,6 +196,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
           end
         end
 
+        # These two tests require that the multiplication is removed from the timeout
         it "triggers the timeout when the totem is in the list" do
           send_message("totems add noir timeout: 3", as: carl)
           wait(10).for do

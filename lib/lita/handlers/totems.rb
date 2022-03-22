@@ -286,7 +286,7 @@ module Lita
         redis.hset("totem/#{totem}/waiting_since", user_id, Time.now.to_i)
         if @@DemoEnvironments.include? totem
           # Create async job
-          after(timeout) do |timer|
+          after(timeout*3600) do |timer|
             # Check that the user is the current owner of the totem
             current_owner = redis.get("totem/#{totem}/owning_user_id")
             if user_id == current_owner
