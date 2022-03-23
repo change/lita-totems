@@ -314,13 +314,15 @@ module Lita
           next_user = Lita::User.find_by_id(next_user_id)
           robot.send_messages(Lita::Source.new(user: next_user), %{You are now in possession of totem "#{totem}", yielded by #{response.user.name}.})
           if timeout
-            robot.send_messages(Lita::Source.new(user: response.user.name), %{Your totem "#{totem}", expired and has been given to #{nex_user.name}.})
+            robot.send_messages(Lita::Source.new(user: response.user), %{Your totem "#{totem}", expired and has been given to #{next_user.name}.})
           else
             response.reply "You have yielded the totem to #{next_user.name}."
           end
         else
           redis.del("totem/#{totem}/owning_user_id")
-          unless timeout
+          if timeout
+            robot.send_messages(Lita::Source.new(user: response.user), %{Your totem "#{totem}" has expired.})
+          else
             response.reply %{You have yielded the "#{totem}" totem.}
           end
         end
