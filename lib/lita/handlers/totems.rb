@@ -6,6 +6,8 @@ module Lita
   module Handlers
     class Totems < Handler
 
+      @@DemoEnvironments = %w(cyan jade noir opal plum teal vert)
+
       def self.route_regex(action_capture_group)
         %r{
         ^totems?\s+
@@ -15,9 +17,17 @@ module Lita
         }x
       end
 
-      route(route_regex("add|join|take|queue"), :add,
-            help: {
-              'totems add TOTEM <MESSAGE>' => "Adds yourself to the TOTEM queue, or assigns yourself to the TOTEM if it's unassigned. Includes optional MESSAGE."
+      route(
+        %r{
+        ^totems?\s+
+        (add|join|take|queue)\s+
+        (?<totem>\w+)\s*
+        ((?<message>((?!timeout:).)*)\s*)?
+        (timeout:\s?(?<timeout>\d+))?
+        }x,
+        :add,
+          help: {
+            'totems add TOTEM <MESSAGE> timeout: <TIMEOUT?' => "Adds yourself to the TOTEM queue, or assigns yourself to the TOTEM if it's unassigned. Includes optional MESSAGE and optional TIMEOUT."
       })
 
       route(
@@ -74,7 +84,7 @@ module Lita
 
       def destroy(response)
         totem = response.match_data[:totem]
-        if redis.exists("totem/#{totem}") != 0
+        if totem_exists? redis, totem
           redis.del("totem/#{totem}")
           redis.del("totem/#{totem}/list")
           redis.srem("totems", totem)
@@ -91,7 +101,7 @@ module Lita
       def create(response)
         totem = response.match_data[:totem]
 
-        if redis.exists("totem/#{totem}") != 0
+        if totem_exists? redis, totem
           response.reply %{Error: totem "#{totem}" already exists.}
         else
           redis.set("totem/#{totem}", 1)
@@ -103,7 +113,7 @@ module Lita
 
       def add(response)
         totem = response.match_data[:totem]
-        unless redis.exists("totem/#{totem}") != 0
+        unless totem_exists? redis, totem
           response.reply %{Error: there is no totem "#{totem}".}
           return
         end
@@ -121,28 +131,33 @@ module Lita
         end
 
         Stats.capture_totem_use(totem)
-
-        message = response.match_data[:message]
+        message = response.match_data[:message].strip
+        timeout = response.match_data[:timeout]
+        if !timeout.nil? && timeout != '0'
+          timeout = timeout.to_i
+          timeout = 24 if timeout == 0
+        else
+          timeout = 24
+        end
 
         token_acquired = false
         queue_size     = nil
         Redis::Semaphore.new("totem/#{totem}", redis: redis).lock do
           redis.hset("totem/#{totem}/message", user_id, message) if message && message != ""
+          redis.hset("totem/#{totem}/timeout", user_id, timeout) if @@DemoEnvironments.include?(totem)
           if redis.llen("totem/#{totem}/list") == 0 && redis.get("totem/#{totem}/owning_user_id").nil?
             # take it:
             token_acquired = true
-            redis.set("totem/#{totem}/owning_user_id", user_id)
-            redis.hset("totem/#{totem}/waiting_since", user_id, Time.now.to_i)
+            take_totem(response, totem, user_id, timeout)
           else
             # queue:
             queue_size = redis.rpush("totem/#{totem}/list", user_id)
             redis.hset("totem/#{totem}/waiting_since", user_id, Time.now.to_i)
           end
         end
-
+        
         if token_acquired
           # TODO don't readd to totems you are already waiting for!
-          redis.sadd("user/#{user_id}/totems", totem)
           response.reply(%{#{response.user.name}, you now have totem "#{totem}".})
         else
           Stats.capture_people_waiting(totem, queue_size)
@@ -170,6 +185,7 @@ module Lita
               redis.lrem("totem/#{totem_specified}/list", 0, user_id)
               redis.hdel("totem/#{totem_specified}/waiting_since", user_id)
               redis.hdel("totem/#{totem_specified}/message", user_id)
+              redis.hdel("totem/#{totem_specified}/timeout", user_id)
               response.reply("You are no longer in line for the \"#{totem_specified}\" totem.")
             else
               response.reply %{Error: You don't own and aren't waiting for the "#{totem_specified}" totem.}
@@ -182,7 +198,7 @@ module Lita
 
       def kick(response)
         totem = response.match_data[:totem]
-        unless redis.exists("totem/#{totem}") != 0
+        unless totem_exists? redis, totem
           response.reply %{Error: there is no totem "#{totem}".}
           return
         end
@@ -230,6 +246,10 @@ module Lita
       end
 
       private
+      def totem_exists?(redis, totem)
+        redis.exists("totem/#{totem}") != 0
+      end
+
       def new_users_cache
         Hash.new { |h, id| h[id] = Lita::User.find_by_id(id) }
       end
@@ -240,13 +260,16 @@ module Lita
         if first_id
           waiting_since_hash = redis.hgetall("totem/#{totem}/waiting_since")
           message_hash = redis.hgetall("totem/#{totem}/message")
+          timeout_hash = redis.hgetall("totem/#{totem}/timeout")
           str += "#{prefix}1. #{users_cache[first_id].name} (held for #{waiting_duration(waiting_since_hash[first_id])})"
           str += " - #{message_hash[first_id]}" if message_hash[first_id]
+          str += " - timeout: #{timeout_hash[first_id]}" if timeout_hash[first_id]
           str += "\n"
           rest = redis.lrange("totem/#{totem}/list", 0, -1)
           rest.each_with_index do |user_id, index|
             str += "#{prefix}#{index+2}. #{users_cache[user_id].name} (waiting for #{waiting_duration(waiting_since_hash[user_id])})"
             str += " - #{message_hash[user_id]}" if message_hash[user_id]
+            str += " - timeout: #{timeout_hash[user_id]}" if timeout_hash[user_id]
             str += "\n"
           end
         end
@@ -257,25 +280,49 @@ module Lita
         ChronicDuration.output(Time.now.to_i - time.to_i, format: :short) || "0s"
       end
 
-      def yield_totem(totem, user_id, response)
+      def take_totem(response, totem, user_id, timeout)
+        redis.set("totem/#{totem}/owning_user_id", user_id)
+        redis.sadd("user/#{user_id}/totems", totem)
+        redis.hset("totem/#{totem}/waiting_since", user_id, Time.now.to_i)
+        if @@DemoEnvironments.include? totem
+          # Create async job
+          after(timeout*3600) do |timer|
+            # Check that the user is the current owner of the totem
+            current_owner = redis.get("totem/#{totem}/owning_user_id")
+            if user_id == current_owner
+              yield_totem(response.match_data[:totem], user_id, response, true)
+            end
+          end
+        end
+      end
+
+      def yield_totem(totem, user_id, response, timeout=false)
         waiting_since_hash = redis.hgetall("totem/#{totem}/waiting_since")
         Stats.capture_holding_time(totem, waiting_since_hash[user_id])    
 
         redis.srem("user/#{user_id}/totems", totem)
         redis.hdel("totem/#{totem}/waiting_since", user_id)
         redis.hdel("totem/#{totem}/message", user_id)
+        redis.hdel("totem/#{totem}/timeout", user_id)
         next_user_id = redis.lpop("totem/#{totem}/list")
+        # TODO: Remove async job
+        # TODO: Find a way to identify pending jobs so we can cancel them instead of letting them finish and then checking 
         if next_user_id
+          timeout_hash = redis.hgetall("totem/#{totem}/timeout")
           Stats.capture_waiting_time(totem, waiting_since_hash[next_user_id])
-          redis.set("totem/#{totem}/owning_user_id", next_user_id)
-          redis.sadd("user/#{next_user_id}/totems", totem)
-          redis.hset("totem/#{totem}/waiting_since", next_user_id, Time.now.to_i)
+          take_totem(response, totem, next_user_id, timeout_hash[next_user_id].to_i)
           next_user = Lita::User.find_by_id(next_user_id)
-          robot.send_messages(Lita::Source.new(user: next_user), %{You are now in possession of totem "#{totem}," yielded by #{response.user.name}.})
-          response.reply "You have yielded the totem to #{next_user.name}."
+          robot.send_messages(Lita::Source.new(user: next_user), %{You are now in possession of totem "#{totem}", yielded by #{response.user.name}.})
+          if timeout
+            robot.send_messages(Lita::Source.new(user: response.user.name), %{Your totem "#{totem}", expired and has been given to #{nex_user.name}.})
+          else
+            response.reply "You have yielded the totem to #{next_user.name}."
+          end
         else
           redis.del("totem/#{totem}/owning_user_id")
-          response.reply %{You have yielded the "#{totem}" totem.}
+          unless timeout
+            response.reply %{You have yielded the "#{totem}" totem.}
+          end
         end
       end
 

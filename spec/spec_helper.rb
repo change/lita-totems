@@ -9,4 +9,5 @@ SimpleCov.start { add_filter "/spec/" }
 
 require "lita-totems"
 require "lita/rspec"
+require "rspec/wait"
 Lita.version_3_compatibility_mode = false

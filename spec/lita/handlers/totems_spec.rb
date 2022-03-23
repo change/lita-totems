@@ -7,6 +7,10 @@ describe Lita::Handlers::Totems, lita_handler: true do
   it { is_expected.to route("totems add foo message").to(:add) }
   it { is_expected.not_to route("totems add ").to(:add) }
   it { is_expected.not_to route("tote add foo").to(:add) }
+  it { is_expected.to route("totems add chicken timeout: 10").to(:add) }
+  it { is_expected.to route("totems add chicken timeout: 20").to(:add) }
+  it { is_expected.to route("totems add chicken message timeout: 10").to(:add) }
+  it { is_expected.to route("totems add chicken other message timeout:20").to(:add) }
   it { is_expected.to route("totems kick foo").to(:kick) }
   it { is_expected.to route("totems kick foo bob").to(:kick) }
   it { is_expected.to route("totems").to(:info) }
@@ -98,6 +102,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
     context "totem exists" do
       before do
         send_message("totems create chicken")
+        send_message("totems create noir")
       end
 
       context "when nobody is in line" do
@@ -174,6 +179,41 @@ describe Lita::Handlers::Totems, lita_handler: true do
         end
       end
 
+      context "with a timeout" do
+        it "includes the timeout in the totems' info" do
+          Timecop.freeze("2014-03-01 12:00:00") do
+            send_message("totems add noir timeout: 10", as: carl)
+            send_message("totems add noir", as: another_user)
+            send_message("totems add noir timeout: 20", as: yet_another_user)
+          end
+          Timecop.freeze("2014-03-01 13:00:00") do
+            send_message("totems info noir")
+            expect(replies.last).to eq <<-END
+1. Carl (held for 1h) - timeout: 10
+2. person_1 (waiting for 1h) - timeout: 24
+3. person_2 (waiting for 1h) - timeout: 20
+            END
+          end
+        end
+
+        # These two tests require that the multiplication is removed from the timeout
+        it "triggers the timeout when the totem is in the list" do
+          send_message("totems add noir timeout: 3", as: carl)
+          wait(10).for do
+              send_message("totems info noir")
+              replies.last.empty?
+          end.to be(true)
+        end
+
+        it "doesn't trigger timeout when the totem is not on a demo environment" do
+          send_message("totems add chicken timeout: 3", as: carl)
+          wait(10).for do
+              send_message("totems info chicken")
+              replies.last
+          end.to eq("1. Carl (held for 5s)\n")
+        end
+      end
+
       context "with a message" do
         before do
           Timecop.freeze("2014-03-01 12:00:00") do
@@ -189,6 +229,26 @@ describe Lita::Handlers::Totems, lita_handler: true do
 1. Carl (held for 1h) - message
 2. person_1 (waiting for 1h)
 3. person_2 (waiting for 1h) - other message
+            END
+          end
+        end
+      end
+
+      context "with a message and a timeout" do
+        before do
+          Timecop.freeze("2014-03-01 12:00:00") do
+            send_message("totems add noir message timeout: 10", as: carl)
+            send_message("totems add noir", as: another_user)
+            send_message("totems add noir other message timeout:20", as: yet_another_user)
+          end
+        end
+        it "includes the timeout and the message in the totems' info" do
+          Timecop.freeze("2014-03-01 13:00:00") do
+            send_message("totems info noir")
+            expect(replies.last).to eq <<-END
+1. Carl (held for 1h) - message - timeout: 10
+2. person_1 (waiting for 1h) - timeout: 24
+3. person_2 (waiting for 1h) - other message - timeout: 20
             END
           end
         end
