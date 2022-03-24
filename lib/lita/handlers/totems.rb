@@ -296,6 +296,12 @@ module Lita
         end
       end
 
+      def get_user_by_id(user_id)
+        # This query by user_id is needed because if we take the user
+        # from the response, then it will always be the user that first timed out
+        Lita::User.find_by_id(user_id)
+      end
+
       def yield_totem(totem, user_id, response, timeout=false)
         waiting_since_hash = redis.hgetall("totem/#{totem}/waiting_since")
         Stats.capture_holding_time(totem, waiting_since_hash[user_id])    
@@ -314,13 +320,15 @@ module Lita
           next_user = Lita::User.find_by_id(next_user_id)
           robot.send_messages(Lita::Source.new(user: next_user), %{You are now in possession of totem "#{totem}", yielded by #{response.user.name}.})
           if timeout
-            robot.send_messages(Lita::Source.new(user: response.user.name), %{Your totem "#{totem}", expired and has been given to #{nex_user.name}.})
+            robot.send_messages(Lita::Source.new(user: get_user_by_id(user_id)), %{Your totem "#{totem}", expired and has been given to #{next_user.name}.})
           else
             response.reply "You have yielded the totem to #{next_user.name}."
           end
         else
           redis.del("totem/#{totem}/owning_user_id")
-          unless timeout
+          if timeout
+            robot.send_messages(Lita::Source.new(user: get_user_by_id(user_id)), %{Your totem "#{totem}" has expired.})
+          else
             response.reply %{You have yielded the "#{totem}" totem.}
           end
         end
