@@ -18,6 +18,7 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency "chronic_duration"
   spec.add_runtime_dependency "redis-semaphore"
   spec.add_runtime_dependency "signalfx"
+  spec.add_runtime_dependency "redis", "~> 4.0.2"  # This is needed to pin the version used when running tests
 
   spec.add_development_dependency "bundler", "~> 1.3"
   spec.add_development_dependency "rake"
