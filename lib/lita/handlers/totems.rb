@@ -7,7 +7,7 @@ module Lita
     class Totems < Handler
 
       @@DemoEnvironments = %w(cyan jade noir opal plum teal vert)
-      @@EnvToSlackChannelMap = {
+      @@EnvironmentToSlackChannelMap = {
         teal:"#pd-teal-deploys",
         jade:"#pd-pacific-deploys",
         noir:"#pd-contributor-demos",
@@ -246,7 +246,7 @@ module Lita
       def info(response)
         totem_param = response.match_data[:totem]
         resp        = unless totem_param.nil? || totem_param.empty?
-                          channel = @@EnvToSlackChannelMap[totem_param.to_sym]
+                          channel = @@EnvironmentToSlackChannelMap[totem_param.to_sym]
                           r = "*#{totem_param}*"
                           r += " *(#{channel})*" if !channel.nil? && !channel.empty?
                           r += list_users_print(totem_param)
@@ -255,7 +255,7 @@ module Lita
                         users_cache = new_users_cache
                         r           = "Totems:\n"
                         redis.smembers("totems").each do |totem|
-                          channel = @@EnvToSlackChannelMap[totem.to_sym]
+                          channel = @@EnvironmentToSlackChannelMap[totem.to_sym]
                           r += "*#{totem}*"
                           r += " *(#{channel})*" if !channel.nil? && !channel.empty?
                           r += list_users_print(totem, '  ', users_cache)
