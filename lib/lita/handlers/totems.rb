@@ -286,6 +286,7 @@ module Lita
           str += "#{prefix}1. #{users_cache[first_id].name} (held for #{waiting_duration(waiting_since_hash[first_id])})"
           str += " - #{message_hash[first_id]}" if message_hash[first_id]
           str += " - timeout: #{timeout_hash[first_id]}" if timeout_hash[first_id]
+          str += "\n"
           rest = redis.lrange("totem/#{totem}/list", 0, -1)
           rest.each_with_index do |user_id, index|
             str += "#{prefix}#{index+2}. #{users_cache[user_id].name} (waiting for #{waiting_duration(waiting_since_hash[user_id])})"
