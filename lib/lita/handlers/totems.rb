@@ -248,7 +248,7 @@ module Lita
         resp        = unless totem_param.nil? || totem_param.empty?
                           channel = @@EnvToSlackChannelMap[totem_param.to_sym]
                           r = "*#{totem_param}*"
-                          r += " *(#{channel})*" if !channel.empty?
+                          r += " *(#{channel})*" if !channel.nil? && !channel.empty?
                           r += list_users_print(totem_param)
                           r
                       else
@@ -257,7 +257,7 @@ module Lita
                         redis.smembers("totems").each do |totem|
                           channel = @@EnvToSlackChannelMap[totem.to_sym]
                           r += "*#{totem}*"
-                          r += "* (#{channel})*" if !channel.empty?
+                          r += "* (#{channel})*" if !channel.nil? && !channel.empty?
                           r += list_users_print(totem, '  ', users_cache)
                           r += "\n----------\n"
                         end
