@@ -7,6 +7,24 @@ module Lita
     class Totems < Handler
 
       @@DemoEnvironments = %w(cyan jade noir opal plum teal vert)
+      @@EnvironmentToSlackChannelMap = {
+        teal:"#pd-teal-deploys",
+        jade:"#pd-pacific-deploys",
+        noir:"#pd-contributor-demos",
+        opal:"#pd-contributor-demos",
+        vert:"#pd-contributor-demos",
+        cyan:"#demo-deployment-cyan",
+        plum:"#squad-integrity",
+        corgi:"#pd-release-corgi",
+        fe:"#pd-release-fe",
+        user_service:"#pd-release-user-service",
+        petition_service:"#pd-release-petition-service",
+        payment_service:"#pd-release-payment-service",
+        comms_stack:"#pd-release-comms-stack",
+        signature_service:"#pd-release-signature-service",
+        hammer:"#pd-deployment",
+        mallet:"#pd-deployment",
+      }
 
       def self.route_regex(action_capture_group)
         %r{
@@ -228,13 +246,20 @@ module Lita
       def info(response)
         totem_param = response.match_data[:totem]
         resp        = unless totem_param.nil? || totem_param.empty?
-                        list_users_print(totem_param)
+                          channel = @@EnvironmentToSlackChannelMap[totem_param.to_sym]
+                          r = "*#{totem_param}*"
+                          r += " *(#{channel})*" if !channel.nil?
+                          r += list_users_print(totem_param)
+                          r
                       else
                         users_cache = new_users_cache
                         r           = "Totems:\n"
                         redis.smembers("totems").each do |totem|
-                          r += "*#{totem}*\n"
+                          channel = @@EnvironmentToSlackChannelMap[totem.to_sym]
+                          r += "*#{totem}*"
+                          r += " *(#{channel})*" if !channel.nil?
                           r += list_users_print(totem, '  ', users_cache)
+                          r += "\n----------\n"
                         end
                         r
                       end
@@ -257,17 +282,19 @@ module Lita
           waiting_since_hash = redis.hgetall("totem/#{totem}/waiting_since")
           message_hash = redis.hgetall("totem/#{totem}/message")
           timeout_hash = redis.hgetall("totem/#{totem}/timeout")
+          str += "\n"
           str += "#{prefix}1. #{users_cache[first_id].name} (held for #{waiting_duration(waiting_since_hash[first_id])})"
           str += " - #{message_hash[first_id]}" if message_hash[first_id]
           str += " - timeout: #{timeout_hash[first_id]}" if timeout_hash[first_id]
-          str += "\n"
           rest = redis.lrange("totem/#{totem}/list", 0, -1)
           rest.each_with_index do |user_id, index|
+            str += "\n"
             str += "#{prefix}#{index+2}. #{users_cache[user_id].name} (waiting for #{waiting_duration(waiting_since_hash[user_id])})"
             str += " - #{message_hash[user_id]}" if message_hash[user_id]
             str += " - timeout: #{timeout_hash[user_id]}" if timeout_hash[user_id]
-            str += "\n"
           end
+        else
+          str += " *- Available*"
         end
         str
       end
