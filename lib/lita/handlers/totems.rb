@@ -102,7 +102,7 @@ module Lita
 
       def destroy(response)
         totem = response.match_data[:totem]
-        if redis.exists "totem/#{totem}"
+        if redis.exists? "totem/#{totem}"
           redis.del("totem/#{totem}")
           redis.del("totem/#{totem}/list")
           redis.srem("totems", totem)
@@ -119,7 +119,7 @@ module Lita
       def create(response)
         totem = response.match_data[:totem]
 
-        if redis.exists "totem/#{totem}"
+        if redis.exists? "totem/#{totem}"
           response.reply %{Error: totem "#{totem}" already exists.}
         else
           redis.set("totem/#{totem}", 1)
@@ -131,7 +131,7 @@ module Lita
 
       def add(response)
         totem = response.match_data[:totem]
-        unless redis.exists "totem/#{totem}"
+        unless redis.exists? "totem/#{totem}"
           response.reply %{Error: there is no totem "#{totem}".}
           return
         end
@@ -216,7 +216,7 @@ module Lita
 
       def kick(response)
         totem = response.match_data[:totem]
-        unless redis.exists "totem/#{totem}"
+        unless redis.exists? "totem/#{totem}"
           response.reply %{Error: there is no totem "#{totem}".}
           return
         end
@@ -296,7 +296,7 @@ module Lita
         else
           str += " *- Available*"
         end
-        str
+        str + "\n"
       end
 
       def waiting_duration(time)
@@ -309,7 +309,7 @@ module Lita
         redis.hset("totem/#{totem}/waiting_since", user_id, Time.now.to_i)
         if @@DemoEnvironments.include? totem
           # Create async job
-          after(timeout*3600) do |timer|
+          after(timeout) do |timer|
             # Check that the user is the current owner of the totem
             current_owner = redis.get("totem/#{totem}/owning_user_id")
             if user_id == current_owner
