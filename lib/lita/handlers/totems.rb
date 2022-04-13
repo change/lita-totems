@@ -171,6 +171,10 @@ module Lita
             # queue:
             queue_size = redis.rpush("totem/#{totem}/list", user_id)
             redis.hset("totem/#{totem}/waiting_since", user_id, Time.now.to_i)
+            if redis.smembers("user/#{user_id}/totems/reminder").exclude?(totem)
+              response.reply(%{#{response.user.name}, someone just added the "#{totem}" totem, are you still using it?})
+              redis.sadd("user/#{user_id}/totems/reminder", totem)
+            end
           end
         end
         
@@ -333,6 +337,7 @@ module Lita
         redis.hdel("totem/#{totem}/waiting_since", user_id)
         redis.hdel("totem/#{totem}/message", user_id)
         redis.hdel("totem/#{totem}/timeout", user_id)
+        redis.srem("user/#{user_id}/totems/reminder", totem) if redis.smembers("user/#{user_id}/totems/reminder").include?(totem)
         next_user_id = redis.lpop("totem/#{totem}/list")
         # TODO: Remove async job
         # TODO: Find a way to identify pending jobs so we can cancel them instead of letting them finish and then checking 
