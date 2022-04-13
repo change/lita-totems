@@ -171,9 +171,10 @@ module Lita
             # queue:
             queue_size = redis.rpush("totem/#{totem}/list", user_id)
             redis.hset("totem/#{totem}/waiting_since", user_id, Time.now.to_i)
-            unless redis.smembers("user/#{user_id}/totems/reminder").include?(totem)
-              response.reply(%{#{response.user.name}, someone just added the "#{totem}" totem, are you still using it?})
-              redis.sadd("user/#{user_id}/totems/reminder", totem)
+            current_owner_id = redis.get("totem/#{totem}/owning_user_id")
+            unless redis.sismember("user/#{current_owner_id}/totems/reminder", totem)
+              robot.send_messages(Lita::Source.new(user: current_owner_id), %{someone just added the "#{totem}" totem, are you still using it?})
+              redis.sadd("user/#{current_owner_id}/totems/reminder", totem)
             end
           end
         end
