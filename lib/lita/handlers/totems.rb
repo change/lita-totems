@@ -173,7 +173,7 @@ module Lita
             redis.hset("totem/#{totem}/waiting_since", user_id, Time.now.to_i)
             current_owner_id = redis.get("totem/#{totem}/owning_user_id")
             unless redis.sismember("user/#{current_owner_id}/totems/reminder", totem)
-              robot.send_messages(Lita::Source.new(user: current_owner_id), %{someone just added the "#{totem}" totem, are you still using it?})
+              robot.send_messages(Lita::Source.new(user: Lita::User.find_by_id(current_owner_id)), %{someone just added the "#{totem}" totem, are you still using it?})
               redis.sadd("user/#{current_owner_id}/totems/reminder", totem)
             end
           end
