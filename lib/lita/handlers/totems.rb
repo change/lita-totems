@@ -24,6 +24,7 @@ module Lita
         signature_service:"#pd-release-signature-service",
         hammer:"#pd-deployment",
         mallet:"#pd-deployment",
+        etl_extract:"#squad-data-platform"
       }
 
       def self.route_regex(action_capture_group)
