@@ -171,7 +171,7 @@ module Lita
             # queue:
             queue_size = redis.rpush("totem/#{totem}/list", user_id)
             redis.hset("totem/#{totem}/waiting_since", user_id, Time.now.to_i)
-            if redis.smembers("user/#{user_id}/totems/reminder").exclude?(totem)
+            unless redis.smembers("user/#{user_id}/totems/reminder").include?(totem)
               response.reply(%{#{response.user.name}, someone just added the "#{totem}" totem, are you still using it?})
               redis.sadd("user/#{user_id}/totems/reminder", totem)
             end
