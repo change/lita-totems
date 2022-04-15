@@ -348,7 +348,8 @@ module Lita
           Stats.capture_waiting_time(totem, waiting_since_hash[next_user_id])
           take_totem(response, totem, next_user_id, timeout_hash[next_user_id].to_i)
           next_user = Lita::User.find_by_id(next_user_id)
-          robot.send_messages(Lita::Source.new(user: next_user), %{You are now in possession of totem "#{totem}", yielded by #{response.user.name}.})
+          queue_size = redis.llen("totem/#{totem}/list")
+          robot.send_messages(Lita::Source.new(user: next_user), %{You are now in possession of totem "#{totem}", yielded by #{response.user.name}. There are #{queue_size} people in line after you.})
           if timeout
             robot.send_messages(Lita::Source.new(user: get_user_by_id(user_id)), %{Your totem "#{totem}", expired and has been given to #{next_user.name}.})
           else
