@@ -189,6 +189,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
           Timecop.freeze("2014-03-01 13:00:00") do
             send_message("totems info noir")
             expect(replies.last).to eq <<-END
+*noir* *(#pd-contributor-demos)*
 1. Carl (held for 1h) - timeout: 10
 2. person_1 (waiting for 1h) - timeout: 24
 3. person_2 (waiting for 1h) - timeout: 20
@@ -201,16 +202,16 @@ describe Lita::Handlers::Totems, lita_handler: true do
           send_message("totems add noir timeout: 3", as: carl)
           wait(10).for do
               send_message("totems info noir")
-              replies.last.empty?
-          end.to be(true)
+              replies.last
+          end.to eq("*noir* *(#pd-contributor-demos)* *- Available*\n")
         end
 
         it "doesn't trigger timeout when the totem is not on a demo environment" do
           send_message("totems add chicken timeout: 3", as: carl)
-          wait(10).for do
+          wait(5).for do
               send_message("totems info chicken")
               replies.last
-          end.to eq("1. Carl (held for 5s)\n")
+          end.to eq("*chicken*\n1. Carl (held for 5s)\n")
         end
       end
 
@@ -226,6 +227,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
           Timecop.freeze("2014-03-01 13:00:00") do
             send_message("totems info chicken")
             expect(replies.last).to eq <<-END
+*chicken*
 1. Carl (held for 1h) - message
 2. person_1 (waiting for 1h)
 3. person_2 (waiting for 1h) - other message
@@ -246,6 +248,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
           Timecop.freeze("2014-03-01 13:00:00") do
             send_message("totems info noir")
             expect(replies.last).to eq <<-END
+*noir* *(#pd-contributor-demos)*
 1. Carl (held for 1h) - message - timeout: 10
 2. person_1 (waiting for 1h) - timeout: 24
 3. person_2 (waiting for 1h) - other message - timeout: 20
@@ -318,6 +321,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
           Timecop.freeze("2014-03-01 13:00:00") do
             send_message("totems info chicken")
             expect(replies.last).to eq <<-END
+*chicken*
 1. Carl (held for 2h)
 2. person_1 (waiting for 1h)
 3. person_2 (waiting for 1h)
@@ -325,6 +329,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
             send_message("totems yield", as: carl)
             send_message("totems info chicken")
             expect(replies.last).to eq <<-END
+*chicken*
 1. person_1 (held for 0s)
 2. person_2 (waiting for 1h)
             END
@@ -336,7 +341,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
           send_message("totems yield", as: carl)
           expect(replies.last).to eq(%{You have yielded the "chicken" totem.})
           send_message("totems info chicken")
-          expect(replies.last).to eq ""
+          expect(replies.last).to eq "*chicken* *- Available*\n"
         end
 
       end
@@ -395,7 +400,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
               send_message("totems yield chicken", as: carl)
               expect(replies.last).to eq(%{You are no longer in line for the "chicken" totem.})
               send_message("totems info chicken")
-              expect(replies.last).to eq("1. person_1 (held for 1h)\n")
+              expect(replies.last).to eq("*chicken*\n1. person_1 (held for 1h)\n")
             end
           end
         end
@@ -406,7 +411,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
             send_message("totems yield", as: carl)
             expect(replies.last).to eq(%{You are no longer in line for the "chicken" totem.})
             send_message("totems info chicken")
-            expect(replies.last).to eq("1. person_1 (held for 1h)\n")
+            expect(replies.last).to eq("*chicken*\n1. person_1 (held for 1h)\n")
           end
         end
       end
@@ -429,7 +434,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
               send_message("totems yield chicken", as: carl)
               expect(replies.last).to eq(%{You are no longer in line for the "chicken" totem.})
               send_message("totems info chicken")
-              expect(replies.last).to eq("1. person_1 (held for 1h)\n2. person_2 (waiting for 1h)\n")
+              expect(replies.last).to eq("*chicken*\n1. person_1 (held for 1h)\n2. person_2 (waiting for 1h)\n")
             end
           end
         end
@@ -461,7 +466,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
               send_message("totems yield chicken", as: carl)
               expect(replies.last).to eq(%{You are no longer in line for the "chicken" totem.})
               send_message("totems info chicken")
-              expect(replies.last).to eq("1. person_1 (held for 1h)\n2. person_2 (waiting for 1h)\n")
+              expect(replies.last).to eq("*chicken*\n1. person_1 (held for 1h)\n2. person_2 (waiting for 1h)\n")
             end
           end
         end
@@ -511,7 +516,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
           if target.user.id == carl.id
             expect(message).to eq(%{You have been kicked from totem "chicken" by #{user.name}.})
           elsif target.user.id == another_user.id
-            expect(message).to eq("")
+            expect(message).to eq("*chicken* *- Available*\n")
           end
         end
         send_message("totems kick chicken")
@@ -545,6 +550,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
         Timecop.freeze("2014-03-01 13:00:00") do
           send_message("totems info chicken")
           expect(replies.last).to eq <<-END
+*chicken*
 1. Carl (held for 1h)
 2. person_1 (waiting for 1h)
 3. person_2 (waiting for 1h)
@@ -562,14 +568,20 @@ describe Lita::Handlers::Totems, lita_handler: true do
   1. Carl (held for 1d 1h)
   2. person_1 (waiting for 1d 1h)
   3. person_2 (waiting for 1d 1h)
+
+----------
           END
           expect(replies.last).to include <<-END
 *duck*
   1. person_2 (held for 1d 1h)
   2. Carl (waiting for 1d 1h)
+
+----------
           END
           expect(replies.last).to include <<-END
-*ball*
+*ball* *- Available*
+
+----------
           END
         end
       end
