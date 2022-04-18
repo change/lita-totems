@@ -174,8 +174,7 @@ module Lita
             redis.hset("totem/#{totem}/waiting_since", user_id, Time.now.to_i)
             current_owner_id = redis.get("totem/#{totem}/owning_user_id")
             unless redis.sismember("user/#{current_owner_id}/totems/reminder", totem)
-              robot.send_messages(Lita::Source.new(user: Lita::User.find_by_id(current_owner_id)), %{#{response.user.name} just added the "#{totem}" totem, are you still using it?})
-              redis.sadd("user/#{current_owner_id}/totems/reminder", totem)
+              setReminderToTotemOwner(current_owner_id, response, totem)
             end
           end
         end
@@ -372,6 +371,11 @@ module Lita
           # more performant we could convert these lists to sorted sets
           redis.lrange("totem/#{totem}/list", 0, -1).include?(user_id)
         end
+      end
+
+      def setReminderToTotemOwner(current_owner_id, response, totem)
+        robot.send_messages(Lita::Source.new(user: Lita::User.find_by_id(current_owner_id)), %{#{response.user.name} just added the "#{totem}" totem, are you still using it?})
+        redis.sadd("user/#{current_owner_id}/totems/reminder", totem)
       end
     end
 

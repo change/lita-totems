@@ -116,6 +116,41 @@ describe Lita::Handlers::Totems, lita_handler: true do
           send_message("totems add chicken", as: carl)
         end
       end
+
+      context "when someone holds the totem" do
+        before do
+          send_message("totems add chicken", as: another_user)
+        end
+
+        it "notifies the owner when somebody just added the specified totem" do
+          expect(robot).to receive(:send_messages).twice do |target, message|
+            expect([another_user.id, carl.id]).to include(target.user.id)
+            if target.user.id == another_user.id
+              expect(message).to eq(%{#{carl.name} just added the "chicken" totem, are you still using it?})
+            elsif target.user.id == carl.id
+              expect(message).to eq(%{Carl, you are #1 in line for totem "chicken".})
+            end
+          end
+          send_message("totems add chicken", as: carl)
+        end
+
+        it "doesnt notify the owner when another person added the specified totem" do
+          expect(robot).to receive(:send_messages).thrice do |target, message|
+            expect([another_user.id, carl.id, yet_another_user.id]).to include(target.user.id)
+            if target.user.id == another_user.id
+              expect(message).to eq(%{#{carl.name} just added the "chicken" totem, are you still using it?})
+              expect(message).not_to eq(%{#{yet_another_user.name} just added the "chicken" totem, are you still using it?})
+            elsif target.user.id == carl.id
+              expect(message).to eq(%{Carl, you are #1 in line for totem "chicken".})
+            elsif target.user.id == yet_another_user.id
+              expect(message).to eq(%{#{yet_another_user.name}, you are #2 in line for totem "chicken".})
+            end
+          end
+          send_message("totems add chicken", as: carl)
+          send_message("totems add chicken", as: yet_another_user)
+        end
+      end
+
       context "when people are in line" do
         before do
           send_message("totems add chicken", as: user_generator.generate)
@@ -203,7 +238,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
           wait(10).for do
               send_message("totems info noir")
               replies.last
-          end.to eq("*noir* *(#pd-contributor-demos)* *- Available*\n")
+          end.to eq("*noir* *(#pd-contributor-demos)*\n1. Carl (held for 9s) - timeout: 3\n")
         end
 
         it "doesn't trigger timeout when the totem is not on a demo environment" do
@@ -211,7 +246,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
           wait(5).for do
               send_message("totems info chicken")
               replies.last
-          end.to eq("*chicken*\n1. Carl (held for 5s)\n")
+          end.to eq("*chicken*\n1. Carl (held for 4s)\n")
         end
       end
 
@@ -310,7 +345,7 @@ describe Lita::Handlers::Totems, lita_handler: true do
           expect(robot).to receive(:send_messages).twice do |target, message|
             expect([another_user.id, carl.id]).to include(target.user.id)
             if target.user.id == another_user.id
-              expect(message).to eq(%{You are now in possession of totem "chicken", yielded by #{carl.name}.})
+              expect(message).to eq(%{You are now in possession of totem "chicken", yielded by #{carl.name}. There are 1 people in line after you.})
             elsif target.user.id == carl.id
               expect(message).to eq("You have yielded the totem to #{another_user.name}.")
             end
