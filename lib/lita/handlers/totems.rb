@@ -24,6 +24,7 @@ module Lita
         signature_service:"#pd-release-signature-service",
         hammer:"#pd-deployment",
         mallet:"#pd-deployment",
+        etl_extract:"#squad-data-platform"
       }
 
       def self.route_regex(action_capture_group)
@@ -171,6 +172,10 @@ module Lita
             # queue:
             queue_size = redis.rpush("totem/#{totem}/list", user_id)
             redis.hset("totem/#{totem}/waiting_since", user_id, Time.now.to_i)
+            current_owner_id = redis.get("totem/#{totem}/owning_user_id")
+            unless redis.sismember("user/#{current_owner_id}/totems/reminder", totem)
+              setReminderToTotemOwner(current_owner_id, response, totem)
+            end
           end
         end
         
@@ -333,6 +338,7 @@ module Lita
         redis.hdel("totem/#{totem}/waiting_since", user_id)
         redis.hdel("totem/#{totem}/message", user_id)
         redis.hdel("totem/#{totem}/timeout", user_id)
+        redis.srem("user/#{user_id}/totems/reminder", totem) if redis.smembers("user/#{user_id}/totems/reminder").include?(totem)
         next_user_id = redis.lpop("totem/#{totem}/list")
         # TODO: Remove async job
         # TODO: Find a way to identify pending jobs so we can cancel them instead of letting them finish and then checking 
@@ -341,7 +347,8 @@ module Lita
           Stats.capture_waiting_time(totem, waiting_since_hash[next_user_id])
           take_totem(response, totem, next_user_id, timeout_hash[next_user_id].to_i)
           next_user = Lita::User.find_by_id(next_user_id)
-          robot.send_messages(Lita::Source.new(user: next_user), %{You are now in possession of totem "#{totem}", yielded by #{response.user.name}.})
+          queue_size = redis.llen("totem/#{totem}/list")
+          robot.send_messages(Lita::Source.new(user: next_user), %{You are now in possession of totem "#{totem}", yielded by #{response.user.name}. There are #{queue_size} people in line after you.})
           if timeout
             robot.send_messages(Lita::Source.new(user: get_user_by_id(user_id)), %{Your totem "#{totem}", expired and has been given to #{next_user.name}.})
           else
@@ -364,6 +371,11 @@ module Lita
           # more performant we could convert these lists to sorted sets
           redis.lrange("totem/#{totem}/list", 0, -1).include?(user_id)
         end
+      end
+
+      def setReminderToTotemOwner(current_owner_id, response, totem)
+        robot.send_messages(Lita::Source.new(user: Lita::User.find_by_id(current_owner_id)), %{#{response.user.name} just added the "#{totem}" totem, are you still using it?})
+        redis.sadd("user/#{current_owner_id}/totems/reminder", totem)
       end
     end
 
