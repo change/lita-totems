@@ -376,6 +376,16 @@ module Lita
       end
     end
 
+    Thread.new { Timer.new(interval: 5, recurring: true) do |timer|
+      Totems.DemoEnvironments.each do |totem|
+        pending_messages = redis.hgetall("totem/#{totem}/timeout_messages")
+        pending_messages.each do |user_id, message|
+          robot.send_messages(Lita::Source.new(user: Lita::User.find_by_id(user_id)), message)
+          redis.hdel("totem/#{totem}/timeout_messages", user_id)
+        end
+      end
+    end.start }
+    
     Lita.register_handler(Totems)
   end
 end
