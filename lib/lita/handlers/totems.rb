@@ -2,6 +2,10 @@ require 'lita'
 require 'chronic_duration'
 require 'redis-semaphore'
 require "lita/handlers/stats"
+require "lita/handlers/workers"
+require 'sidekiq'
+require 'sidekiq/api'
+
 module Lita
   module Handlers
     class Totems < Handler
@@ -313,14 +317,8 @@ module Lita
         redis.sadd("user/#{user_id}/totems", totem)
         redis.hset("totem/#{totem}/waiting_since", user_id, Time.now.to_i)
         if @@DemoEnvironments.include? totem
-          # Create async job
-          after(timeout*3600) do |timer|
-            # Check that the user is the current owner of the totem
-            current_owner = redis.get("totem/#{totem}/owning_user_id")
-            if user_id == current_owner
-              yield_totem(response.match_data[:totem], user_id, response, true)
-            end
-          end
+          timeout_job = Timeout.perform_in(timeout*3600, user_id, totem)
+          redis.hset("totem/#{totem}/timeout_jobs", user_id, timeout_job.jid)
         end
       end
 
@@ -330,7 +328,7 @@ module Lita
         Lita::User.find_by_id(user_id)
       end
 
-      def yield_totem(totem, user_id, response, timeout=false)
+      def yield_totem(totem, user_id, response)
         waiting_since_hash = redis.hgetall("totem/#{totem}/waiting_since")
         Stats.capture_holding_time(totem, waiting_since_hash[user_id])    
 
@@ -340,8 +338,15 @@ module Lita
         redis.hdel("totem/#{totem}/timeout", user_id)
         redis.srem("user/#{user_id}/totems/reminder", totem) if redis.smembers("user/#{user_id}/totems/reminder").include?(totem)
         next_user_id = redis.lpop("totem/#{totem}/list")
-        # TODO: Remove async job
-        # TODO: Find a way to identify pending jobs so we can cancel them instead of letting them finish and then checking 
+        timeout_jobs = redis.hgetall("totem/#{totem}/timeout_jobs")
+        current_timeout_job = timeout_jobs[user_id]
+        if current_timeout_job
+          Sidekiq::Queue.new
+          queue.each do |job|
+            user_id
+            job.delete if job.jid == current_timeout_job
+          end
+        end
         if next_user_id
           timeout_hash = redis.hgetall("totem/#{totem}/timeout")
           Stats.capture_waiting_time(totem, waiting_since_hash[next_user_id])
@@ -349,18 +354,10 @@ module Lita
           next_user = Lita::User.find_by_id(next_user_id)
           queue_size = redis.llen("totem/#{totem}/list")
           robot.send_messages(Lita::Source.new(user: next_user), %{You are now in possession of totem "#{totem}", yielded by #{response.user.name}. There are #{queue_size} people in line after you.})
-          if timeout
-            robot.send_messages(Lita::Source.new(user: get_user_by_id(user_id)), %{Your totem "#{totem}", expired and has been given to #{next_user.name}.})
-          else
-            response.reply "You have yielded the totem to #{next_user.name}."
-          end
+          response.reply "You have yielded the totem to #{next_user.name}."
         else
           redis.del("totem/#{totem}/owning_user_id")
-          if timeout
-            robot.send_messages(Lita::Source.new(user: get_user_by_id(user_id)), %{Your totem "#{totem}" has expired.})
-          else
-            response.reply %{You have yielded the "#{totem}" totem.}
-          end
+          response.reply %{You have yielded the "#{totem}" totem.}
         end
       end
 
