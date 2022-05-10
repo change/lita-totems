@@ -37,11 +37,11 @@ module Lita
           take_totem(response, totem, next_user_id, timeout_hash[next_user_id].to_i)
           next_user = Lita::User.find_by_id(next_user_id)
           queue_size = @redis_namespace.llen("totem/#{totem}/list")
-          robot.send_messages(Lita::Source.new(user: next_user), %{You are now in possession of totem "#{totem}", yielded by #{response.user.name}. There are #{queue_size} people in line after you.})
-          robot.send_messages(Lita::Source.new(user: get_user_by_id(user_id)), %{Your totem "#{totem}", expired and has been given to #{next_user.name}.})
+          @redis_namespace.hset("totem/#{totem}/timeout_messages", next_user_id, %{You are now in possession of totem "#{totem}", yielded by #{response.user.name}. There are #{queue_size} people in line after you.})
+          @redis_namespace.hset("totem/#{totem}/timeout_messages", user_id, %{Your totem "#{totem}", expired and has been given to #{next_user.name}.})
         else
           @redis_namespace.del("totem/#{totem}/owning_user_id")
-          robot.send_messages(Lita::Source.new(user: get_user_by_id(user_id)), %{Your totem "#{totem}" has expired.})
+          @redis_namespace.hset("totem/#{totem}/timeout_messages", user_id, %{Your totem "#{totem}" has expired.})
         end
       end
 
@@ -55,8 +55,6 @@ module Lita
       end
 
       def perform(totem, user_id)
-        puts "Workin' test"
-        puts @redis_namespace.smembers 'totems'
         yield_totem(totem, user_id)
       end
     end
