@@ -31,6 +31,10 @@ module Lita
         etl_extract:"#squad-data-platform"
       }
 
+      def self.DemoEnvironments
+        @@DemoEnvironments
+      end
+
       def self.route_regex(action_capture_group)
         %r{
         ^totems?\s+
@@ -376,12 +380,13 @@ module Lita
       end
     end
 
-    Thread.new { Timer.new(interval: 5, recurring: true) do |timer|
+    Thread.new { Timer.new(interval: 5*60, recurring: true) do |timer|
+      robot = Robot.new
       Totems.DemoEnvironments.each do |totem|
-        pending_messages = redis.hgetall("totem/#{totem}/timeout_messages")
+        pending_messages = Lita.redis.hgetall("totem/#{totem}/timeout_messages")
         pending_messages.each do |user_id, message|
           robot.send_messages(Lita::Source.new(user: Lita::User.find_by_id(user_id)), message)
-          redis.hdel("totem/#{totem}/timeout_messages", user_id)
+          Lita.redis.hdel("totem/#{totem}/timeout_messages", user_id)
         end
       end
     end.start }
