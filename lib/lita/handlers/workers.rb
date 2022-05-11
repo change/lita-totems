@@ -17,7 +17,7 @@ module Lita
         @redis_namespace.set("totem/#{totem}/owning_user_id", user_id)
         @redis_namespace.sadd("user/#{user_id}/totems", totem)
         @redis_namespace.hset("totem/#{totem}/waiting_since", user_id, Time.now.to_i)
-        timeout_job = Timeout.perform_in(timeout*3600, user_id, totem)
+        timeout_job = Timeout.perform_in(timeout, user_id, totem)
         @redis_namespace.hset("totem/#{totem}/timeout_jobs", user_id, timeout_job.jid)
       end
 

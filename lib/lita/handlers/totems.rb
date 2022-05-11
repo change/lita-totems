@@ -321,7 +321,7 @@ module Lita
         redis.sadd("user/#{user_id}/totems", totem)
         redis.hset("totem/#{totem}/waiting_since", user_id, Time.now.to_i)
         if @@DemoEnvironments.include? totem
-          timeout_job = Timeout.perform_in(timeout*3600, user_id, totem)
+          timeout_job = Timeout.perform_in(timeout, user_id, totem)
           redis.hset("totem/#{totem}/timeout_jobs", user_id, timeout_job.jid)
         end
       end
@@ -380,7 +380,7 @@ module Lita
       end
     end
 
-    Thread.new { Timer.new(interval: 5*60, recurring: true) do |timer|
+    Thread.new { Timer.new(interval: 5, recurring: true) do |timer|
       robot = Robot.new
       Totems.DemoEnvironments.each do |totem|
         pending_messages = Lita.redis.hgetall("totem/#{totem}/timeout_messages")
