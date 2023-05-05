@@ -14,7 +14,7 @@ module Lita
         opal:"#pd-contributor-demos",
         vert:"#pd-contributor-demos",
         cyan:"#demo-deployment-cyan",
-        plum:"#squad-integrity",
+        plum:"#demo-deployment-plum",
         corgi:"#pd-release-corgi",
         fe:"#pd-release-fe",
         user_service:"#pd-release-user-service",
