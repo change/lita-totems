@@ -8,13 +8,13 @@ module Lita
 
       @@DemoEnvironments = %w(cyan jade noir opal plum teal vert)
       @@EnvironmentToSlackChannelMap = {
-        teal:"#pd-deployment-teal",
-        jade:"#pd-deployment-jade",
-        noir:"#pd-deployment-noir",
-        opal:"#pd-deployment-opal",
-        vert:"#pd-deployment-vert",
-        cyan:"#pd-deployment-cyan",
-        plum:"#pd-deployment-plum",
+        teal:"#demo-deployment-teal",
+        jade:"#demo-deployment-jade",
+        noir:"#demo-deployment-noir",
+        opal:"#demo-deployment-opal",
+        vert:"#demo-deployment-vert",
+        cyan:"#demo-deployment-cyan",
+        plum:"#demo-deployment-plum",
         corgi:"#pd-release-corgi",
         fe:"#pd-release-fe",
         user_service:"#pd-release-user-service",
